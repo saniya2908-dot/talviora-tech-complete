@@ -43,13 +43,14 @@ export default function AuthPage() {
         if (error) throw error;
         setMsg("Verification link sent! Please check your email.");
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (error) throw error;
         setMsg("Authentication successful! Redirecting...");
-        setTimeout(() => router.push("/"), 1200);
+        const destination = data.user?.app_metadata?.role === "admin" ? "/admin/questions" : "/";
+        setTimeout(() => router.push(destination), 1200);
       }
     } catch (err: any) {
       console.warn("Auth warning:", err);

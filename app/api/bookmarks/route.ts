@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
-import { getAuthenticatedUser, sanitizeInput } from "@/lib/auth-server";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import { createAuthenticatedSupabase, getAuthenticatedUser, sanitizeInput } from "@/lib/auth-server";
 
 export async function GET(req: Request) {
   const user = await getAuthenticatedUser(req);
@@ -10,8 +10,10 @@ export async function GET(req: Request) {
   if (!isSupabaseConfigured) {
     return NextResponse.json({ success: false, error: "Bookmark storage is unavailable until Supabase is configured." }, { status: 503 });
   }
+  const db = createAuthenticatedSupabase(user);
+  if (!db) return NextResponse.json({ success: false, error: "Your sign-in could not be verified." }, { status: 401 });
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("bookmarks")
     .select("*")
     .eq("user_id", user.id)
@@ -33,6 +35,8 @@ export async function POST(req: Request) {
   if (!isSupabaseConfigured) {
     return NextResponse.json({ success: false, error: "Bookmark storage is unavailable until Supabase is configured." }, { status: 503 });
   }
+  const db = createAuthenticatedSupabase(user);
+  if (!db) return NextResponse.json({ success: false, error: "Your sign-in could not be verified." }, { status: 401 });
 
   try {
     const body: unknown = await req.json();
@@ -54,7 +58,7 @@ export async function POST(req: Request) {
     const metadata = input.metadata && typeof input.metadata === "object" && !Array.isArray(input.metadata)
       ? input.metadata
       : {};
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("bookmarks")
       .upsert(
         { user_id: user.id, item_type: itemType, item_id: itemId, title, metadata },
@@ -82,6 +86,8 @@ export async function DELETE(req: Request) {
   if (!isSupabaseConfigured) {
     return NextResponse.json({ success: false, error: "Bookmark storage is unavailable until Supabase is configured." }, { status: 503 });
   }
+  const db = createAuthenticatedSupabase(user);
+  if (!db) return NextResponse.json({ success: false, error: "Your sign-in could not be verified." }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const itemId = sanitizeInput(searchParams.get("item_id"), 100);
@@ -90,7 +96,7 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ success: false, error: "item_id is required." }, { status: 400 });
   }
 
-  const { error } = await supabase
+  const { error } = await db
     .from("bookmarks")
     .delete()
     .eq("user_id", user.id)

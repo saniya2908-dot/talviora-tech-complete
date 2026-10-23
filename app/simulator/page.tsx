@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   MessageSquareCode,
   Sparkles,
@@ -61,9 +62,15 @@ interface CodeCritique {
   provider: string;
 }
 
-export default function SimulatorPage() {
+function SimulatorPageContent() {
+  const searchParams = useSearchParams();
   // Mode switcher: structured coding practice (default) vs technical interview simulator
-  const [activeMode, setActiveMode] = useState<"practice" | "interview">("practice");
+  const [activeMode, setActiveMode] = useState<"practice" | "interview">(
+    searchParams.get("mode") === "interview" ? "interview" : "practice"
+  );
+  useEffect(() => {
+    setActiveMode(searchParams.get("mode") === "interview" ? "interview" : "practice");
+  }, [searchParams]);
 
   // =========================================================================
   // STRUCTURED CODING PRACTICE STATE (8-STEP SEQUENCE)
@@ -1236,5 +1243,13 @@ export default function SimulatorPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function SimulatorPage() {
+  return (
+    <Suspense fallback={<main className="mx-auto max-w-5xl p-8 text-sm text-[var(--text-secondary)]">Loading simulator…</main>}>
+      <SimulatorPageContent />
+    </Suspense>
   );
 }

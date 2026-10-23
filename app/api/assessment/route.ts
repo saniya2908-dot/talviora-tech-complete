@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
 import { assessmentQuestionsList, initialUserProfile } from "@/lib/career-data";
 import { generateCareerAssessmentAnalysis, isGeminiConfigured } from "@/lib/gemini";
-import { getAuthenticatedUser, sanitizeInput } from "@/lib/auth-server";
+import { createAuthenticatedSupabase, getAuthenticatedUser, sanitizeInput } from "@/lib/auth-server";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 export async function GET(req: Request) {
   try {
     const user = await getAuthenticatedUser(req);
 
-    if (user.id && isSupabaseConfigured) {
-      const { data, error } = await supabase
+    const db = createAuthenticatedSupabase(user);
+    if (user.id && isSupabaseConfigured && db) {
+      const { data, error } = await db
         .from("assessments")
         .select("*")
         .eq("user_id", user.id)
@@ -154,8 +155,9 @@ export async function POST(req: Request) {
     let persisted = false;
     let persistenceMessage = "This assessment is available for this browser session and was not saved to an account.";
 
-    if (user.id && isSupabaseConfigured) {
-      const { error } = await supabase.from("assessments").insert({
+    const db = createAuthenticatedSupabase(user);
+    if (user.id && isSupabaseConfigured && db) {
+      const { error } = await db.from("assessments").insert({
         user_id: user.id,
         target_role: targetRole,
         readiness_score: analysis.readinessScore,

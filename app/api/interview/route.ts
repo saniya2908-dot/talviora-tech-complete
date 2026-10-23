@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { evaluateInterviewResponse, isGeminiConfigured } from "@/lib/gemini";
 import { interviewQuestionsList } from "@/lib/career-data";
-import { getAuthenticatedUser, sanitizeInput } from "@/lib/auth-server";
+import { createAuthenticatedSupabase, getAuthenticatedUser, sanitizeInput } from "@/lib/auth-server";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -56,8 +56,9 @@ export async function POST(req: Request) {
     const user = await getAuthenticatedUser(req);
     let persisted = false;
     let persistenceMessage = "Feedback was generated but was not saved to an account.";
-    if (user.id && isSupabaseConfigured) {
-      const { error } = await supabase.from("interview_sessions").insert({
+    const db = createAuthenticatedSupabase(user);
+    if (user.id && isSupabaseConfigured && db) {
+      const { error } = await db.from("interview_sessions").insert({
         user_id: user.id,
         role,
         question,

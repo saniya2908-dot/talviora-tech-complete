@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -10,6 +12,7 @@ import {
   FolderGit2,
   FileText,
   MessageSquareCode,
+  Inbox,
   TrendingUp,
   Award,
   Layers,
@@ -43,6 +46,18 @@ interface SidebarCategory {
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    void supabase.auth.getUser().then(({ data }) => {
+      if (mounted) setIsAdmin(data.user?.app_metadata?.role === "admin");
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAdmin(session?.user.app_metadata?.role === "admin");
+    });
+    return () => { mounted = false; subscription.unsubscribe(); };
+  }, []);
 
   // The 7 understandable navigation groups
   const categories: SidebarCategory[] = [
@@ -94,6 +109,7 @@ export default function Sidebar() {
       items: [
         { label: "Your AI Learning Guide", href: "/mentor", icon: Sparkles, badge: "AI" },
         { label: "AI & Prompt Blueprint", href: "/ai-blueprint", icon: Cpu },
+        ...(isAdmin ? [{ label: "Admin Question Inbox", href: "/admin/questions", icon: Inbox }] : []),
       ],
     },
     {

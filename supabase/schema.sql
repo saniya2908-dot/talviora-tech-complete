@@ -2,6 +2,8 @@
 -- TALVIORA TECH: AI Career Intelligence Platform
 -- Production PostgreSQL Database DDL & Row Level Security (RLS) Schema
 -- Compatible with Supabase PostgreSQL 15+
+-- Apply this baseline before the adaptive roadmap migration.
+BEGIN;
 -- ==============================================================================
 
 -- Enable UUID & Crypto extensions
@@ -38,7 +40,7 @@ CREATE INDEX IF NOT EXISTS idx_profiles_portfolio_slug ON public.profiles(portfo
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.assessments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     target_role TEXT NOT NULL,
     readiness_score INT NOT NULL CHECK (readiness_score >= 0 AND readiness_score <= 100),
     strong_pillars JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -59,7 +61,7 @@ CREATE INDEX IF NOT EXISTS idx_assessments_assessed_at ON public.assessments(ass
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.interview_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     role TEXT NOT NULL,
     question TEXT NOT NULL,
     candidate_answer TEXT NOT NULL,
@@ -79,7 +81,7 @@ CREATE INDEX IF NOT EXISTS idx_interview_sessions_evaluated_at ON public.intervi
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.tasks (
     id TEXT PRIMARY KEY DEFAULT ('task-' || gen_random_uuid()::text),
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     category TEXT NOT NULL DEFAULT 'General',
     hours INT NOT NULL DEFAULT 2 CHECK (hours >= 1 AND hours <= 40),
@@ -119,57 +121,72 @@ ALTER TABLE public.bookmarks ENABLE ROW LEVEL SECURITY;
 -- Profiles Policies
 DROP POLICY IF EXISTS "Public can view public profiles via slug" ON public.profiles;
 CREATE POLICY "Public can view public profiles via slug"
-    ON public.profiles FOR SELECT
-    USING (portfolio_slug IS NOT NULL OR auth.uid() = id);
+    ON public.profiles FOR SELECT TO anon
+    USING (portfolio_slug IS NOT NULL);
+
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
+CREATE POLICY "Users can view own profile"
+    ON public.profiles FOR SELECT TO authenticated
+    USING (auth.uid() = id);
 
 DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
 CREATE POLICY "Users can insert their own profile"
-    ON public.profiles FOR INSERT
+    ON public.profiles FOR INSERT TO authenticated
     WITH CHECK (auth.uid() = id);
 
 DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
 CREATE POLICY "Users can update their own profile"
-    ON public.profiles FOR UPDATE
-    USING (auth.uid() = id);
+    ON public.profiles FOR UPDATE TO authenticated
+    USING (auth.uid() = id)
+    WITH CHECK (auth.uid() = id);
 
 -- Assessments Policies
 DROP POLICY IF EXISTS "Users can view own assessments" ON public.assessments;
 CREATE POLICY "Users can view own assessments"
-    ON public.assessments FOR SELECT
-    USING (auth.uid() = user_id OR auth.uid() IS NULL);
+    ON public.assessments FOR SELECT TO authenticated
+    USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can insert own assessments" ON public.assessments;
 CREATE POLICY "Users can insert own assessments"
-    ON public.assessments FOR INSERT
-    WITH CHECK (auth.uid() = user_id OR auth.uid() IS NULL);
+    ON public.assessments FOR INSERT TO authenticated
+    WITH CHECK (auth.uid() = user_id);
 
 -- Interview Sessions Policies
 DROP POLICY IF EXISTS "Users can view own interviews" ON public.interview_sessions;
 CREATE POLICY "Users can view own interviews"
-    ON public.interview_sessions FOR SELECT
-    USING (auth.uid() = user_id OR auth.uid() IS NULL);
+    ON public.interview_sessions FOR SELECT TO authenticated
+    USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can insert own interviews" ON public.interview_sessions;
 CREATE POLICY "Users can insert own interviews"
-    ON public.interview_sessions FOR INSERT
-    WITH CHECK (auth.uid() = user_id OR auth.uid() IS NULL);
+    ON public.interview_sessions FOR INSERT TO authenticated
+    WITH CHECK (auth.uid() = user_id);
 
 -- Tasks Policies
 DROP POLICY IF EXISTS "Users can view own tasks" ON public.tasks;
 CREATE POLICY "Users can view own tasks"
-    ON public.tasks FOR SELECT
-    USING (auth.uid() = user_id OR auth.uid() IS NULL);
+    ON public.tasks FOR SELECT TO authenticated
+    USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can manage own tasks" ON public.tasks;
 CREATE POLICY "Users can manage own tasks"
-    ON public.tasks FOR ALL
-    USING (auth.uid() = user_id OR auth.uid() IS NULL);
+    ON public.tasks FOR ALL TO authenticated
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
 
 -- Bookmarks Policies
 DROP POLICY IF EXISTS "Users can manage own bookmarks" ON public.bookmarks;
 CREATE POLICY "Users can manage own bookmarks"
-    ON public.bookmarks FOR ALL
-    USING (auth.uid() = user_id);
+    ON public.bookmarks FOR ALL TO authenticated
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
+-- Explicit API grants: public portfolios expose only queried fields.
+REVOKE ALL ON TABLE public.profiles, public.assessments, public.interview_sessions, public.tasks, public.bookmarks FROM anon;
+GRANT SELECT (name, target_role, readiness_score, bio, skills, portfolio_slug) ON TABLE public.profiles TO anon;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.profiles TO authenticated;
+GRANT SELECT, INSERT ON TABLE public.assessments, public.interview_sessions TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.tasks, public.bookmarks TO authenticated;
 
 -- ------------------------------------------------------------------------------
 -- 7. TRIGGERS & AUTOMATION
@@ -204,10 +221,46 @@ BEGIN
     ON CONFLICT (id) DO NOTHING;
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW
     EXECUTE FUNCTION public.handle_new_user();
+
+-- ------------------------------------------------------------------------------
+-- 8. MENTOR QUESTIONS (Question-only admin inbox)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.mentor_questions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    question TEXT NOT NULL CHECK (char_length(question) BETWEEN 3 AND 4000),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_mentor_questions_created_at
+    ON public.mentor_questions(created_at DESC);
+
+ALTER TABLE public.mentor_questions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone can submit mentor questions" ON public.mentor_questions;
+CREATE POLICY "Anyone can submit mentor questions"
+    ON public.mentor_questions FOR INSERT TO anon, authenticated
+    WITH CHECK (char_length(question) BETWEEN 3 AND 4000);
+
+DROP POLICY IF EXISTS "Talviora admins can read mentor questions" ON public.mentor_questions;
+CREATE POLICY "Talviora admins can read mentor questions"
+    ON public.mentor_questions FOR SELECT TO authenticated
+    USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+DROP POLICY IF EXISTS "Talviora admins can delete mentor questions" ON public.mentor_questions;
+CREATE POLICY "Talviora admins can delete mentor questions"
+    ON public.mentor_questions FOR DELETE TO authenticated
+    USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+GRANT INSERT ON public.mentor_questions TO anon, authenticated;
+GRANT SELECT, DELETE ON public.mentor_questions TO authenticated;
+REVOKE UPDATE ON public.mentor_questions FROM anon, authenticated;
+
+COMMIT;
+NOTIFY pgrst, 'reload schema';

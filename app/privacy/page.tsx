@@ -30,7 +30,7 @@ export default function PrivacyPage() {
         <section className="space-y-2">
           <h2 className="font-display-serif font-bold text-base text-[var(--color-burgundy)]">3. AI requests</h2>
           <p>
-            Assessment answers, mentor messages, and interview practice answers are sent to Google Gemini when the AI key is configured. Do not include sensitive personal information. Provider processing and retention follow Google's current terms and policies; this project makes no separate retention guarantee.
+            Assessment answers, mentor messages, and interview practice answers are sent to Google Gemini when the AI key is configured. When the question inbox is enabled, each new mentor question is also saved in the site database and can be read or deleted by an authorized Talviora administrator. AI replies and the rest of the conversation are not placed in that admin inbox. Questions remain there until an admin deletes them. Do not include sensitive personal information. Provider processing and retention follow Google's current terms and policies; this project makes no separate retention guarantee.
           </p>
         </section>
 

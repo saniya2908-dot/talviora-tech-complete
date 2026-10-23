@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
-import { getAuthenticatedUser, sanitizeInput, sanitizeNumber } from "@/lib/auth-server";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import { createAuthenticatedSupabase, getAuthenticatedUser, sanitizeInput, sanitizeNumber } from "@/lib/auth-server";
 
 const taskColumns = ["backlog", "in-progress", "completed"] as const;
 type TaskColumn = (typeof taskColumns)[number];
@@ -13,8 +13,10 @@ export async function GET(req: Request) {
   if (!isSupabaseConfigured) {
     return NextResponse.json({ success: false, error: "Task storage is unavailable until Supabase is configured." }, { status: 503 });
   }
+  const db = createAuthenticatedSupabase(user);
+  if (!db) return NextResponse.json({ success: false, error: "Your sign-in could not be verified." }, { status: 401 });
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("tasks")
     .select("*")
     .eq("user_id", user.id)
@@ -36,6 +38,8 @@ export async function POST(req: Request) {
   if (!isSupabaseConfigured) {
     return NextResponse.json({ success: false, error: "Task storage is unavailable until Supabase is configured." }, { status: 503 });
   }
+  const db = createAuthenticatedSupabase(user);
+  if (!db) return NextResponse.json({ success: false, error: "Your sign-in could not be verified." }, { status: 401 });
 
   try {
     const body: unknown = await req.json();
@@ -57,7 +61,7 @@ export async function POST(req: Request) {
       column,
     };
 
-    const { data, error } = await supabase.from("tasks").insert(task).select("*").single();
+    const { data, error } = await db.from("tasks").insert(task).select("*").single();
     if (error || !data) {
       console.error("Task create failed:", error?.message);
       return NextResponse.json({ success: false, error: "Task was not saved to your account." }, { status: 503 });
@@ -77,6 +81,8 @@ export async function PATCH(req: Request) {
   if (!isSupabaseConfigured) {
     return NextResponse.json({ success: false, error: "Task storage is unavailable until Supabase is configured." }, { status: 503 });
   }
+  const db = createAuthenticatedSupabase(user);
+  if (!db) return NextResponse.json({ success: false, error: "Your sign-in could not be verified." }, { status: 401 });
 
   try {
     const body: unknown = await req.json();
@@ -90,7 +96,7 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ success: false, error: "A task id and valid column are required." }, { status: 400 });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("tasks")
       .update({ column, updated_at: new Date().toISOString() })
       .eq("id", id)

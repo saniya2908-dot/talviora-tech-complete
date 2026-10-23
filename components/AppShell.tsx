@@ -91,7 +91,7 @@ function PreviewDataNotice() {
   return (
     <aside className="mb-5 rounded-xl border border-[rgba(var(--color-dusty-rose-rgb),0.55)] bg-[var(--surface-rose)] px-4 py-3 text-xs leading-relaxed text-[var(--text-primary)]" role="note">
       <strong className="font-bold text-[var(--color-burgundy)]">Preview workspace.</strong>{" "}
-      Curriculum, role, project, and catalogue content is bundled reference material. Personal history is empty until you add it. Market and opportunity feeds are not connected; AI and account features require configured services.
+      Curriculum, role, project, and catalogue content is bundled reference material. Personal history is empty until you add it. Market and opportunity feeds are not connected; some account features may need setup.
     </aside>
   );
 }

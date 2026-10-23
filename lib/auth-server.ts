@@ -1,9 +1,10 @@
-import { supabase } from "./supabase";
+import { createRequestScopedSupabase, supabase } from "./supabase";
 
 export interface AuthenticatedUser {
   id: string | null;
   email?: string;
   isGuest: boolean;
+  accessToken?: string;
 }
 
 /**
@@ -25,6 +26,7 @@ export async function getAuthenticatedUser(req: Request): Promise<AuthenticatedU
             id: data.user.id,
             email: data.user.email,
             isGuest: false,
+            accessToken: token,
           };
         }
       }
@@ -37,6 +39,11 @@ export async function getAuthenticatedUser(req: Request): Promise<AuthenticatedU
     id: null,
     isGuest: true,
   };
+}
+
+/** Create a Supabase client scoped to the verified user's JWT so RLS sees auth.uid(). */
+export function createAuthenticatedSupabase(user: AuthenticatedUser) {
+  return user.accessToken ? createRequestScopedSupabase(user.accessToken) : null;
 }
 
 /**

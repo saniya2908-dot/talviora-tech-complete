@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { getAuthenticatedUser, sanitizeInput, sanitizeNumber } from "@/lib/auth-server";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import { createAuthenticatedSupabase, getAuthenticatedUser, sanitizeInput, sanitizeNumber } from "@/lib/auth-server";
 
 function toClientProfile(row: Record<string, unknown>) {
   return {
@@ -35,8 +35,10 @@ export async function GET(req: Request) {
       { status: 503 }
     );
   }
+  const db = createAuthenticatedSupabase(user);
+  if (!db) return NextResponse.json({ success: false, error: "Your sign-in could not be verified." }, { status: 401 });
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("profiles")
     .select("*")
     .eq("id", user.id)
@@ -67,6 +69,8 @@ export async function POST(req: Request) {
       { status: 503 }
     );
   }
+  const db = createAuthenticatedSupabase(user);
+  if (!db) return NextResponse.json({ success: false, error: "Your sign-in could not be verified." }, { status: 401 });
 
   let body: unknown;
   try {
@@ -121,7 +125,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("profiles")
       .upsert({ id: user.id, ...updates, updated_at: new Date().toISOString() })
       .select("*")
