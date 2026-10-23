@@ -1,5 +1,7 @@
 # TALVIORA TECH: AI Career Intelligence Platform
 
+**Live site:** [Render deployment](https://talviora-tech-mentor.onrender.com)
+
 > **Implementation status:** This README and the bundled QA/security reports are archived source material, not current test evidence. The workbook/checklist explicitly leaves feature definitions 12–18 pending, while this README supplies conflicting names for them. The app keeps those entries as unconfirmed scaffolds. See [`docs/IMPLEMENTATION_AUDIT.md`](docs/IMPLEMENTATION_AUDIT.md) for the current verified state.
 
 [![Next.js](https://img.shields.io/badge/Next.js-15.1.0-black?logo=next.js)](https://nextjs.org/)
